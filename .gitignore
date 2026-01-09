@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.turbo
+.next
+.DS_Store
+cdk.out
+.env
