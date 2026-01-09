@@ -1,0 +1,44 @@
+name: Deploy FintERP
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build & Synth IaC
+        run: |
+          npx turbo run build --filter=iac...
+          cd packages/iac
+          npx cdk synth
+
+      - name: Deploy Infrastructure (Approve on Main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd packages/iac
+          npx cdk deploy --all --require-approval never
