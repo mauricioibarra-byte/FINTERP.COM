@@ -1,0 +1,30 @@
+type Query {
+  getTenantInfo(id: ID!): Tenant
+  getProduct(id: ID!): Product
+}
+
+type Mutation {
+  createOrder(input: OrderInput!): Order
+}
+
+type Tenant {
+  id: ID!
+  name: String!
+}
+
+type Product {
+  id: ID!
+  name: String!
+  price: Float!
+  stock: Int!
+}
+
+type Order {
+  id: ID!
+  status: String!
+}
+
+input OrderInput {
+  tenantId: ID!
+  items: [ID!]!
+}
