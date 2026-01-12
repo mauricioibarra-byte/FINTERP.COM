@@ -1,0 +1,66 @@
+Bundling asset FintERP-Api/FintERPBackend/Code/Stage...
+X [ERROR] Could not resolve "class-transformer"
+
+    ../shared-utils/node_modules/@nestjs/common/serializer/class-serializer.interceptor.js:25:118:
+      25 │ ...'ClassSerializerInterceptor', () => require('class-transformer'));
+         ╵                                                ~~~~~~~~~~~~~~~~~~~
+
+  You can mark the path "class-transformer" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle. You can also surround this "require" call with a try/catch block to handle this failure at run-time instead of bundle-time.
+
+X [ERROR] Could not resolve "class-validator"
+
+    ../shared-utils/node_modules/@nestjs/common/pipes/validation.pipe.js:39:100:
+      39 │ ...-validator', 'ValidationPipe', () => require('class-validator')));
+         ╵                                                 ~~~~~~~~~~~~~~~~~
+
+  You can mark the path "class-validator" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle. You can also surround this "require" call with a try/catch block to handle this failure at run-time instead of bundle-time.
+
+X [ERROR] Could not resolve "class-transformer"
+
+    ../shared-utils/node_modules/@nestjs/common/pipes/validation.pipe.js:43:102:
+      43 │ ...nsformer', 'ValidationPipe', () => require('class-transformer')));
+         ╵                                               ~~~~~~~~~~~~~~~~~~~
+
+  You can mark the path "class-transformer" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle. You can also surround this "require" call with a try/catch block to handle this failure at run-time instead of bundle-time.
+
+3 errors
+node:child_process:964
+    throw err;
+    ^
+
+Error: Command failed: C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\@esbuild\win32-x64\esbuild.exe --bundle C:\Users\mauri\.gemini\antigravity\scratch\FintERP\apps\backend\src\lambda.ts --target=node18 --platform=node --outfile=C:\Users\mauri\AppData\Local\Temp\cdk.out9EL8lq\bundling-temp-7d4855f4fde519408b6ccced6801a88f5aeb281ec4fb84b475498efa6be2dbec-building\index.js --minify --external:@nestjs/microservices --external:@nestjs/websockets --external:pg-native
+    at genericNodeError (node:internal/errors:998:15)
+    at wrappedFn (node:internal/errors:543:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at Object.execFileSync (node:child_process:961:15)
+    at Object.<anonymous> (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\esbuild\bin\esbuild:222:28)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1892:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 20772,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v25.2.1
+C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\aws-s3-assets\lib\asset.js:1
+"use strict";var _a;Object.defineProperty(exports,"__esModule",{value:!0}),exports.Asset=void 0;var jsiiDeprecationWarnings=()=>{var tmp=require("../../.warnings.jsii.js");return jsiiDeprecationWarnings=()=>tmp,tmp};const JSII_RTTI_SYMBOL_1=Symbol.for("jsii.rtti");var path=()=>{var tmp=require("path");return path=()=>tmp,tmp},constructs_1=()=>{var tmp=require("constructs");return constructs_1=()=>tmp,tmp},compat_1=()=>{var tmp=require("./compat");return compat_1=()=>tmp,tmp},kms=()=>{var tmp=require("../../aws-kms");return kms=()=>tmp,tmp},s3=()=>{var tmp=require("../../aws-s3");return s3=()=>tmp,tmp},cdk=()=>{var tmp=require("../../core");return cdk=()=>tmp,tmp},errors_1=()=>{var tmp=require("../../core/lib/errors");return errors_1=()=>tmp,tmp},cxapi=()=>{var tmp=require("../../cx-api");return cxapi=()=>tmp,tmp};class Asset extends constructs_1().Construct{constructor(scope,id,props){super(scope,id);try{jsiiDeprecationWarnings().aws_cdk_lib_aws_s3_assets_AssetProps(props)}catch(error){throw process.env.JSII_DEBUG!=="1"&&error.name==="DeprecationError"&&Error.captureStackTrace(error,Asset),error}if(!props.path)throw new(errors_1()).ValidationError("Asset path cannot be empty",this);this.isBundled=props.bundling!=null;const staging=new(cdk()).AssetStaging(this,"Stage",{...props,sourcePath:path().resolve(props.path),follow:props.followSymlinks??(0,compat_1().toSymlinkFollow)(props.follow),assetHash:props.assetHash??props.sourceHash});this.assetHash=staging.assetHash,this.sourceHash=this.assetHash;const stack=cdk().Stack.of(this);this.assetPath=staging.relativeStagedPath(stack),this.isFile=staging.packaging===cdk().FileAssetPackaging.FILE,this.isZipArchive=staging.isArchive;const location=stack.synthesizer.addFileAsset({packaging:staging.packaging,sourceHash:this.sourceHash,fileName:this.assetPath,deployTime:props.deployTime,displayName:props.displayName??cdk().Names.stackRelativeConstructPath(this)});this.s3BucketName=location.bucketName,this.s3ObjectKey=location.objectKey,this.s3ObjectUrl=location.s3ObjectUrl,this.httpUrl=location.httpUrl,this.s3Url=location.httpUrl;const kmsKey=location.kmsKeyArn?kms().Key.fromKeyArn(this,"Key",location.kmsKeyArn):void 0;this.bucket=s3().Bucket.fromBucketAttributes(this,"AssetBucket",{bucketName:this.s3BucketName,encryptionKey:kmsKey});for(const reader of props.readers??[])this.grantRead(reader)}addResourceMetadata(resource,resourceProperty){try{jsiiDeprecationWarnings().aws_cdk_lib_CfnResource(resource)}catch(error){throw process.env.JSII_DEBUG!=="1"&&error.name==="DeprecationError"&&Error.captureStackTrace(error,this.addResourceMetadata),error}this.node.tryGetContext(cxapi().ASSET_RESOURCE_METADATA_ENABLED_CONTEXT)&&(resource.cfnOptions.metadata=resource.cfnOptions.metadata||{},resource.cfnOptions.metadata[cxapi().ASSET_RESOURCE_METADATA_PATH_KEY]=this.assetPath,resource.cfnOptions.metadata[cxapi().ASSET_RESOURCE_METADATA_IS_BUNDLED_KEY]=this.isBundled,resource.cfnOptions.metadata[cxapi().ASSET_RESOURCE_METADATA_PROPERTY_KEY]=resourceProperty)}grantRead(grantee){try{jsiiDeprecationWarnings().aws_cdk_lib_aws_iam_IGrantable(grantee)}catch(error){throw process.env.JSII_DEBUG!=="1"&&error.name==="DeprecationError"&&Error.captureStackTrace(error,this.grantRead),error}this.bucket.grantRead(grantee)}}exports.Asset=Asset,_a=JSII_RTTI_SYMBOL_1,Asset[_a]={fqn:"aws-cdk-lib.aws_s3_assets.Asset",version:"2.215.0"};
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ^
+ValidationError: Failed to bundle asset FintERP-Api/FintERPBackend/Code/Stage, bundle output is located at C:\Users\mauri\AppData\Local\Temp\cdk.out9EL8lq\bundling-temp-7d4855f4fde519408b6ccced6801a88f5aeb281ec4fb84b475498efa6be2dbec-building: ValidationError: cmd /c npx.cmd --no-install esbuild --bundle "C:\Users\mauri\.gemini\antigravity\scratch\FintERP\apps\backend\src\lambda.ts" --target=node18 --platform=node --outfile="C:\Users\mauri\AppData\Local\Temp\cdk.out9EL8lq\bundling-temp-7d4855f4fde519408b6ccced6801a88f5aeb281ec4fb84b475498efa6be2dbec-building\index.js" --minify --external:@nestjs/microservices --external:@nestjs/websockets --external:pg-native run in directory C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac exited with status 1
+    at path [FintERP-Api/FintERPBackend/Code/Stage] in aws-cdk-lib.AssetStaging
+
+    at new Asset (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\aws-s3-assets\lib\asset.js:1:1252)
+    at AssetCode.bind (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\aws-lambda\lib\code.js:5:4382)
+    at new Function2 (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\aws-lambda\lib\function.js:1:11029)
+    at new Function2 (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\core\lib\prop-injectable.js:1:488)
+    at new NodejsFunction (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\aws-cdk-lib\aws-lambda-nodejs\lib\function.js:1:2292)
+    at new ApiStack (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\lib\core\api-stack.ts:15:33)
+    at Object.<anonymous> (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\bin\iac.ts:28:13)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Module.m._compile (C:\Users\mauri\.gemini\antigravity\scratch\FintERP\packages\iac\node_modules\ts-node\src\index.ts:1618:23)
+    at node:internal/modules/cjs/loader:1892:10

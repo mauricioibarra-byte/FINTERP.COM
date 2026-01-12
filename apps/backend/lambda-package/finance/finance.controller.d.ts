@@ -1,0 +1,70 @@
+import { FinanceService } from './finance.service';
+import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+export declare class FinanceController {
+    private readonly financeService;
+    constructor(financeService: FinanceService);
+    create(createJournalEntryDto: CreateJournalEntryDto): Promise<{
+        glAccount: string;
+        costCenter: string | null;
+        companyCode: string;
+        fiscalYear: number;
+        documentNumber: string;
+        postingDate: Date;
+        documentDate: Date;
+        amountTx: import("@prisma/client/runtime/library").Decimal;
+        currencyTx: string;
+        amountCompany: import("@prisma/client/runtime/library").Decimal;
+        currencyCompany: string;
+        profitCenter: string | null;
+        userId: string;
+        tenantId: string;
+        id: string;
+        ledgerId: string | null;
+        lineItem: number;
+        entryDate: Date;
+        amountGlobal: import("@prisma/client/runtime/library").Decimal | null;
+        currencyGlobal: string | null;
+        customerId: string | null;
+        vendorId: string | null;
+        assetId: string | null;
+        productId: string | null;
+        isReversed: boolean;
+    }>;
+    findAll(): Promise<{
+        glAccount: string;
+        costCenter: string | null;
+        companyCode: string;
+        fiscalYear: number;
+        documentNumber: string;
+        postingDate: Date;
+        documentDate: Date;
+        amountTx: import("@prisma/client/runtime/library").Decimal;
+        currencyTx: string;
+        amountCompany: import("@prisma/client/runtime/library").Decimal;
+        currencyCompany: string;
+        profitCenter: string | null;
+        userId: string;
+        tenantId: string;
+        id: string;
+        ledgerId: string | null;
+        lineItem: number;
+        entryDate: Date;
+        amountGlobal: import("@prisma/client/runtime/library").Decimal | null;
+        currencyGlobal: string | null;
+        customerId: string | null;
+        vendorId: string | null;
+        assetId: string | null;
+        productId: string | null;
+        isReversed: boolean;
+    }[]>;
+    createGLAccount(dto: {
+        accountCode: string;
+        description: string;
+        accountType: string;
+    }): Promise<{
+        tenantId: string;
+        accountCode: string;
+        description: string | null;
+        accountType: string;
+    }>;
+}

@@ -1,0 +1,7 @@
+Bundling asset FintERP-Api/FintERPBackend/Code/Stage...
+        1 archivo(s) copiado(s).
+        1 archivo(s) copiado(s).
+
+  ...7de054a73181407e976be6553256aa8e14cb8c64871781-building\index.js  3.6mb
+
+Done in 936ms

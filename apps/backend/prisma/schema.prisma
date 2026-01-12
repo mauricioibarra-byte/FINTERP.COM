@@ -1,0 +1,726 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Tenants (Global Registry)
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  planTier  String   @default("STANDARD") @map("plan_tier") @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  glAccounts       GlAccount[]
+  costCenters      CostCenter[]
+  journalEntries   UniversalJournalEntry[]
+  vendors          Vendor[]
+  customers        Customer[]
+  cafs             Caf[]
+  dtes             Dte[]
+  bankAccounts     BankAccount[]
+  bankTransactions BankTransaction[]
+
+  // SaaS Relations
+  planId       String?       @map("plan_id") @db.Uuid
+  plan         Plan?         @relation(fields: [planId], references: [id])
+  subscription Subscription?
+
+  // IAM Relations
+  users User[]
+  roles Role[]
+
+  reconciliationSuggestions ReconciliationSuggestion[]
+
+  // Workflow Relations
+  workflowDefinitions      WorkflowDefinition[]
+  workflowInstances        WorkflowInstance[]
+  approvalRequests         ApprovalRequest[]
+  auditLogs                AuditLog[]
+  financialReportSnapshots FinancialReportSnapshot[]
+  smartMatchPatterns       SmartMatchPattern[]
+
+  // Fixed Assets
+  fixedAssets         FixedAsset[]
+  depreciationEntries DepreciationEntry[]
+
+  // Controlling & FP&A
+  budgets Budget[]
+
+  // Treasury
+  cashFlowForecasts CashFlowForecast[]
+
+  // Tax Engine
+  taxDeclarations TaxDeclaration[]
+  honorarios      HonorarioEntry[]
+
+  @@map("tenants")
+}
+
+// 2. Analysis Structures
+model GlAccount {
+  tenantId    String  @map("tenant_id") @db.Uuid
+  accountCode String  @map("account_code") @db.VarChar(20)
+  description String? @db.VarChar(255)
+  accountType String  @map("account_type") @db.VarChar(20) // ASSET, LIABILITY...
+
+  // Hierarchy & Reporting
+  parentId               String? @map("parent_id") @db.VarChar(20) // Self-reference to accountCode
+  level                  Int     @default(1)
+  financialStatementLine String? @map("financial_statement_line") @db.VarChar(100)
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id])
+  parent   GlAccount?  @relation("GlHierarchy", fields: [tenantId, parentId], references: [tenantId, accountCode])
+  children GlAccount[] @relation("GlHierarchy")
+
+  budgets Budget[]
+
+  @@id([tenantId, accountCode])
+  @@map("gl_accounts")
+}
+
+model CostCenter {
+  tenantId       String  @map("tenant_id") @db.Uuid
+  costCenterCode String  @map("cost_center_code") @db.VarChar(20)
+  name           String? @db.VarChar(255)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, costCenterCode])
+  @@map("cost_centers")
+}
+
+// 3. THE UNIVERSAL JOURNAL (ACDOCA Replacement)
+model UniversalJournalEntry {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  // Context
+  ledgerId       String? @default("0L") @map("ledger_id") @db.VarChar(4)
+  companyCode    String  @map("company_code") @db.VarChar(10)
+  fiscalYear     Int     @map("fiscal_year")
+  documentNumber String  @map("document_number") @db.VarChar(50)
+  lineItem       Int     @map("line_item")
+
+  // Dates
+  postingDate  DateTime @map("posting_date") @db.Date
+  documentDate DateTime @map("document_date") @db.Date
+  entryDate    DateTime @default(now()) @map("entry_date") @db.Timestamptz
+
+  // Financials (Transaction Currency)
+  amountTx   Decimal @map("amount_transaction_currency") @db.Decimal(19, 4)
+  currencyTx String  @map("currency_transaction") @db.VarChar(3)
+
+  // Financials (Company Currency)
+  amountCompany   Decimal @map("amount_company_currency") @db.Decimal(19, 4)
+  currencyCompany String  @map("currency_company") @db.VarChar(3)
+
+  // Financials (Global Currency)
+  amountGlobal   Decimal? @map("amount_global_currency") @db.Decimal(19, 4)
+  currencyGlobal String?  @map("currency_global") @db.VarChar(3)
+
+  // Coding Block
+  glAccount  String  @map("gl_account") @db.VarChar(20)
+  customerId String? @map("customer_id") @db.VarChar(50)
+  vendorId   String? @map("vendor_id") @db.VarChar(50)
+  assetId    String? @map("asset_id") @db.VarChar(50)
+  productId  String? @map("product_id") @db.VarChar(50)
+
+  // Controlling
+  costCenter   String? @map("cost_center") @db.VarChar(20)
+  profitCenter String? @map("profit_center") @db.VarChar(20)
+
+  // Metadata
+  userId     String  @map("user_id") @db.VarChar(100)
+  isReversed Boolean @default(false) @map("is_reversed")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, fiscalYear, glAccount])
+  @@index([tenantId, fiscalYear, costCenter])
+  @@index([tenantId, documentNumber])
+  @@map("universal_journal_entry")
+}
+
+// 4. Accounts Payable (AP) Sub-Ledger
+model Vendor {
+  tenantId   String @map("tenant_id") @db.Uuid
+  id         String @default(uuid()) @db.Uuid
+  vendorCode String @map("vendor_code") @db.VarChar(50)
+  name       String @db.VarChar(255)
+  taxId      String @map("tax_id") @db.VarChar(20) // RUT/VAT ID
+
+  // Relations
+  invoices   PurchaseInvoice[]
+  honorarios HonorarioEntry[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@unique([tenantId, vendorCode])
+  @@map("vendors")
+}
+
+model PurchaseInvoice {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  vendorId      String @map("vendor_id") @db.Uuid
+  invoiceNumber String @map("invoice_number") @db.VarChar(50) // The vendor's invoice #
+
+  issueDate DateTime @map("issue_date") @db.Date
+  dueDate   DateTime @map("due_date") @db.Date
+
+  totalAmount Decimal @map("total_amount") @db.Decimal(19, 4)
+  currency    String  @db.VarChar(3)
+
+  status String @default("DRAFT") @db.VarChar(20) // DRAFT, POSTED, PAID
+
+  // Relations
+  vendor                    Vendor                     @relation(fields: [tenantId, vendorId], references: [tenantId, id])
+  reconciliationSuggestions ReconciliationSuggestion[]
+  workflowInstances         WorkflowInstance[]
+
+  @@id([tenantId, id])
+  @@map("purchase_invoices")
+}
+
+// 5. Accounts Receivable (AR) Sub-Ledger
+model Customer {
+  tenantId     String @map("tenant_id") @db.Uuid
+  id           String @default(uuid()) @db.Uuid
+  customerCode String @map("customer_code") @db.VarChar(50)
+  name         String @db.VarChar(255)
+  taxId        String @map("tax_id") @db.VarChar(20)
+
+  // Relations
+  invoices SalesInvoice[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@unique([tenantId, customerCode])
+  @@map("customers")
+}
+
+model SalesInvoice {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  customerId    String @map("customer_id") @db.Uuid
+  invoiceNumber String @map("invoice_number") @db.VarChar(50)
+
+  issueDate DateTime @map("issue_date") @db.Date
+  dueDate   DateTime @map("due_date") @db.Date
+
+  totalAmount Decimal @map("total_amount") @db.Decimal(19, 4)
+  currency    String  @db.VarChar(3)
+
+  status String @default("DRAFT") @db.VarChar(20)
+
+  // Relations
+  customer                  Customer                   @relation(fields: [tenantId, customerId], references: [tenantId, id])
+  reconciliationSuggestions ReconciliationSuggestion[]
+  workflowInstances         WorkflowInstance[]
+
+  @@id([tenantId, id])
+  @@map("sales_invoices")
+}
+
+// 6. Chilean Localization (SII)
+model Caf {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  dteType    Int    @map("dte_type") // 33 (Factura), 39 (Boleta), 61 (Nota Credito)
+  filename   String @db.VarChar(255) // The XML file name
+  xmlContent String @map("xml_content") @db.Text
+
+  startRange    Int @map("start_range")
+  endRange      Int @map("end_range")
+  currentNumber Int @map("current_number") // Next number to use
+
+  isActive   Boolean  @default(true) @map("is_active")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@map("sii_cafs")
+}
+
+model Dte {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  dteType Int @map("dte_type")
+  folio   Int
+
+  // Link to Sales/Purchase Invoice
+  salesInvoiceId    String? @map("sales_invoice_id") @db.Uuid
+  purchaseInvoiceId String? @map("purchase_invoice_id") @db.Uuid
+
+  emissionDate DateTime @map("emission_date") @db.Date
+
+  rutEmisor   String @map("rut_emisor") @db.VarChar(12)
+  rutReceptor String @map("rut_receptor") @db.VarChar(12)
+
+  totalAmount Decimal @map("total_amount") @db.Decimal(19, 4)
+
+  status String @default("GENERATED") @db.VarChar(20) // GENERATED, SIGNED, SUBMITTED, ACCEPTED, REJECTED
+
+  xmlContent String? @map("xml_content") @db.Text
+  pdfUrl     String? @map("pdf_url") @db.VarChar(512)
+
+  siiTrackId String? @map("sii_track_id") @db.VarChar(50)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@unique([tenantId, dteType, folio])
+  @@map("sii_dtes")
+}
+
+// 7. Treasury & Cash Management
+model BankAccount {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  bankName      String @map("bank_name") @db.VarChar(100)
+  accountNumber String @map("account_number") @db.VarChar(50)
+  currency      String @db.VarChar(3)
+
+  glAccount String @map("gl_account") @db.VarChar(20) // Link to GL (111000 - Cta Cte)
+
+  currentBalance Decimal  @map("current_balance") @db.Decimal(19, 4)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  transactions BankTransaction[]
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@map("treasury_bank_accounts")
+}
+
+model BankTransaction {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  bankAccountId String @map("bank_account_id") @db.Uuid
+
+  transactionDate DateTime @map("transaction_date") @db.Date
+  amount          Decimal  @db.Decimal(19, 4) // Positive = Deposit, Negative = Withdraw
+  description     String   @db.VarChar(255)
+  reference       String?  @db.VarChar(100) // Bank Trans ID
+
+  reconciled Boolean @default(false)
+
+  // Relations
+  bankAccount BankAccount @relation(fields: [tenantId, bankAccountId], references: [tenantId, id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+
+  reconciliationSuggestions ReconciliationSuggestion[]
+
+  @@id([tenantId, id])
+  @@index([tenantId, bankAccountId, transactionDate])
+  @@map("treasury_bank_transactions")
+}
+
+// 8. SaaS Platform (Superadmin)
+model Plan {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(50) // FREE, PRO, ENTERPRISE
+  name String @db.VarChar(100)
+
+  monthlyPrice Decimal @map("monthly_price") @db.Decimal(10, 2)
+  currency     String  @default("USD") @db.VarChar(3)
+
+  maxUsers      Int @default(1) @map("max_users")
+  maxDteMonthly Int @default(10) @map("max_dte_monthly") // Limits
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("saas_plans")
+}
+
+model Subscription {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid // One sub per tenant
+
+  status String @default("ACTIVE") @db.VarChar(20) // ACTIVE, PAST_DUE, CANCELED
+
+  currentPeriodStart DateTime @map("current_period_start")
+  currentPeriodEnd   DateTime @map("current_period_end")
+
+  stripeSubscriptionId String? @map("stripe_subscription_id") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("saas_subscriptions")
+}
+
+// 9. Identity & Access Management (RBAC)
+model Role {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  name        String  @db.VarChar(50) // e.g. "Jefe de Finanzas", "Auditor"
+  description String? @db.VarChar(255)
+
+  permisions String[] @map("permissions") // ["GL_READ", "AP_CREATE"]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  users  User[]
+
+  // Workflow Relations
+  workflowDefinitions WorkflowDefinition[]
+  approvalRequests    ApprovalRequest[]
+
+  @@id([tenantId, id])
+  @@unique([tenantId, name]) // Unique Role Name per Tenant
+  @@map("iam_roles")
+}
+
+model User {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  email    String @unique @db.VarChar(100)
+  password String @db.VarChar(255) // Bcrypt hash
+  fullName String @map("full_name") @db.VarChar(100)
+
+  roleId String? @map("role_id") @db.Uuid
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  role   Role?  @relation(fields: [tenantId, roleId], references: [tenantId, id])
+
+  approvalRequests ApprovalRequest[]
+  auditActions     AuditLog[]
+
+  @@id([tenantId, id])
+  @@unique([tenantId, email]) // Email unique per tenant (or global?) Usually global better for login.
+  // Ideally email is globally unique. Let's keep specific constraint below.
+  @@map("iam_users")
+}
+
+// 10. SAP Killer Features (Smart Rec)
+model ReconciliationSuggestion {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  // The Bank Transaction being matched
+  bankTransactionId String @map("bank_transaction_id") @db.Uuid
+
+  // The proposed candidates (could be Invoice or Existing Journal Entry)
+  salesInvoiceId    String? @map("sales_invoice_id") @db.Uuid
+  purchaseInvoiceId String? @map("purchase_invoice_id") @db.Uuid
+
+  confidenceScore Int    @map("confidence_score") // 0-100
+  matchReason     String @map("match_reason") // "Exact amount + date within 3 days"
+
+  status String @default("PENDING") @db.VarChar(20) // PENDING, ACCEPTED, REJECTED
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  bankTransaction BankTransaction  @relation(fields: [tenantId, bankTransactionId], references: [tenantId, id])
+  salesInvoice    SalesInvoice?    @relation(fields: [tenantId, salesInvoiceId], references: [tenantId, id])
+  purchaseInvoice PurchaseInvoice? @relation(fields: [tenantId, purchaseInvoiceId], references: [tenantId, id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, bankTransactionId])
+  @@map("smart_reconciliation_suggestions")
+}
+
+model SmartMatchPattern {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  // The pattern to look for (e.g. "AWS", "UBER")
+  keyword String @db.VarChar(100)
+
+  // The target entity to match
+  targetType String @map("target_type") @db.VarChar(20) // VENDOR, CUSTOMER
+  targetId   String @map("target_id") @db.Uuid
+
+  confidenceBoost Int @default(20) @map("confidence_boost")
+
+  learnedAt DateTime @default(now()) @map("learned_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, keyword])
+  @@map("smart_match_patterns")
+}
+
+// 11. Workflow Engine
+model WorkflowDefinition {
+  tenantId         String @map("tenant_id") @db.Uuid
+  id               String @default(uuid()) @db.Uuid
+  name             String @db.VarChar(100)
+  entityType       String @map("entity_type") @db.VarChar(50) // PURCHASE_INVOICE, etc.
+  triggerCondition Json   @map("trigger_condition") // Logical rules
+
+  requiredRoleId String? @map("required_role_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant @relation(fields: [tenantId], references: [id])
+  requiredRole Role?  @relation(fields: [tenantId, requiredRoleId], references: [tenantId, id])
+
+  instances WorkflowInstance[]
+
+  @@id([tenantId, id])
+  @@map("workflow_definitions")
+}
+
+model WorkflowInstance {
+  tenantId     String @map("tenant_id") @db.Uuid
+  id           String @default(uuid()) @db.Uuid
+  definitionId String @map("definition_id") @db.Uuid
+
+  // Linked Entity (Polymorphic-ish)
+  purchaseInvoiceId String? @map("purchase_invoice_id") @db.Uuid
+  salesInvoiceId    String? @map("sales_invoice_id") @db.Uuid
+
+  status String @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  definition WorkflowDefinition @relation(fields: [tenantId, definitionId], references: [tenantId, id])
+
+  purchaseInvoice PurchaseInvoice? @relation(fields: [tenantId, purchaseInvoiceId], references: [tenantId, id])
+  salesInvoice    SalesInvoice?    @relation(fields: [tenantId, salesInvoiceId], references: [tenantId, id])
+
+  requests ApprovalRequest[]
+
+  @@id([tenantId, id])
+  @@map("workflow_instances")
+}
+
+model ApprovalRequest {
+  tenantId   String @map("tenant_id") @db.Uuid
+  id         String @default(uuid()) @db.Uuid
+  instanceId String @map("instance_id") @db.Uuid
+
+  approverRoleId String? @map("approver_role_id") @db.Uuid
+  approverUserId String? @map("approver_user_id") @db.Uuid
+
+  status     String    @default("PENDING") @db.VarChar(20)
+  comment    String?   @db.Text
+  actionDate DateTime? @map("action_date")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  instance WorkflowInstance @relation(fields: [tenantId, instanceId], references: [tenantId, id])
+  role     Role?            @relation(fields: [tenantId, approverRoleId], references: [tenantId, id])
+  user     User?            @relation(fields: [tenantId, approverUserId], references: [tenantId, id])
+
+  @@id([tenantId, id])
+  @@map("approval_requests")
+}
+
+// 12. Compliance (Immutable Audit)
+model AuditLog {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  entityType String @map("entity_type") @db.VarChar(50) // UNIVERSAL_JOURNAL, USER...
+  entityId   String @map("entity_id") @db.Uuid
+  action     String @db.VarChar(20) // CREATE, UPDATE, DELETE
+
+  changes Json    @map("changes_json") // Detailed diff
+  actorId String? @map("actor_id") @db.Uuid // User who performed action
+
+  // Blockchain-style linking
+  previousHash String? @map("previous_hash") @db.VarChar(64)
+  currentHash  String  @map("current_hash") @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  actor  User?  @relation(fields: [tenantId, actorId], references: [tenantId, id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+// 13. CQRS (Materialized Views)
+model FinancialReportSnapshot {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  reportType String @map("report_type") @db.VarChar(50) // BALANCE_SHEET, INCOME_STATEMENT
+  period     String @db.VarChar(20) // "2023-10", "2023-Q3", "2023"
+
+  data Json @map("data_json") // The full calculated tree
+
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, reportType, period]) // Fast lookup
+  @@map("financial_report_snapshots")
+}
+
+// 14. Fixed Assets (Activo Fijo)
+model FixedAsset {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  assetCode   String @map("asset_code") @db.VarChar(50)
+  name        String @db.VarChar(255)
+  description String? @db.Text
+
+  acquisitionDate DateTime @map("acquisition_date") @db.Date
+  acquisitionCost Decimal  @map("acquisition_cost") @db.Decimal(19, 4)
+  residualValue   Decimal  @default(0) @map("residual_value") @db.Decimal(19, 4)
+  usefulLife      Int      @map("useful_life_months") // In months (e.g., 36)
+
+  // Depreciation
+  depreciationMethod      String  @default("STRAIGHT_LINE") @map("depreciation_method") @db.VarChar(50)
+  accumulatedDepreciation Decimal @default(0) @map("accumulated_depreciation") @db.Decimal(19, 4)
+  bookValue               Decimal @map("current_book_value") @db.Decimal(19, 4)
+
+  status String @default("ACTIVE") @db.VarChar(20) // ACTIVE, DISPOSED, FULLY_DEPRECIATED
+
+  location     String? @db.VarChar(100)
+  serialNumber String? @map("serial_number") @db.VarChar(100)
+
+  // Relations
+  tenant              Tenant              @relation(fields: [tenantId], references: [id])
+  depreciationEntries DepreciationEntry[]
+
+  @@id([tenantId, id])
+  @@unique([tenantId, assetCode])
+  @@map("fixed_assets")
+}
+
+model DepreciationEntry {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  assetId String @map("asset_id") @db.Uuid
+  period  String @db.VarChar(7) // "2023-10"
+
+  amount  Decimal  @db.Decimal(19, 4)
+  runDate DateTime @default(now()) @map("run_date")
+
+  journalEntryId String? @map("journal_entry_id") @db.Uuid // Link to Universal Journal
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id])
+  asset  FixedAsset @relation(fields: [tenantId, assetId], references: [tenantId, id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, assetId])
+  @@index([tenantId, period])
+  @@map("fixed_assets_depreciation")
+}
+
+// 15. Controlling & FP&A
+model Budget {
+  tenantId    String @map("tenant_id") @db.Uuid
+  id          String @default(uuid()) @db.Uuid
+
+  glAccountId String @map("gl_account_id") @db.VarChar(20)
+  period      String @db.VarChar(7) // "2023-10"
+
+  amount Decimal @map("budget_amount") @db.Decimal(19, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  glAccount GlAccount @relation(fields: [tenantId, glAccountId], references: [tenantId, accountCode])
+
+  @@id([tenantId, id])
+  @@unique([tenantId, glAccountId, period])
+  @@map("finance_budgets")
+}
+
+// 16. Treasury Forecasting
+model CashFlowForecast {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  forecastDate DateTime @map("forecast_date") @db.Date
+  amount       Decimal  @db.Decimal(19, 4)
+  
+  type      String @db.VarChar(10) // INFLOW, OUTFLOW
+  certainty String @db.VarChar(10) // HIGH, MEDIUM, LOW
+  source    String @db.VarChar(20) // AR, AP, RECURRING, MANUAL
+
+  description String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, forecastDate])
+  @@map("treasury_cash_flow_forecasts")
+}
+
+// 17. Tax Engine (Chile)
+model TaxDeclaration {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  period   String @db.VarChar(7) // "2023-10"
+  formType String @map("form_type") @db.VarChar(10) // F29, F50
+
+  data   Json   @map("data_json") // Snapshot of the calc
+  status String @default("DRAFT") @db.VarChar(20) // DRAFT, DECLARED, PAID
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, id])
+  @@unique([tenantId, period, formType])
+  @@map("sii_tax_declarations")
+}
+
+model HonorarioEntry {
+  tenantId String @map("tenant_id") @db.Uuid
+  id       String @default(uuid()) @db.Uuid
+
+  vendorId String @map("vendor_id") @db.Uuid
+  
+  issueDate DateTime @map("issue_date") @db.Date
+  amount    Decimal  @db.Decimal(19, 4) // Bruto
+  retention Decimal  @db.Decimal(19, 4) // 13.75%
+  
+  status String @default("CONFIRMED") @db.VarChar(20)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  vendor Vendor @relation(fields: [tenantId, vendorId], references: [tenantId, id])
+
+  @@id([tenantId, id])
+  @@index([tenantId, issueDate])
+  @@map("sii_honorarios")
+}

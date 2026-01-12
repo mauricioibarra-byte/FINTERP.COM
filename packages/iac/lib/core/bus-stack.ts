@@ -2,20 +2,26 @@ import * as cdk from 'aws-cdk-lib';
 import * as events from 'aws-cdk-lib/aws-events';
 import { Construct } from 'constructs';
 
+interface BusStackProps extends cdk.StackProps {
+    environment: string;
+}
+
 export class BusStack extends cdk.Stack {
     public readonly bus: events.EventBus;
 
-    constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    constructor(scope: Construct, id: string, props: BusStackProps) {
         super(scope, id, props);
+
+        const suffix = `-${props.environment}`;
 
         // Central Event Bus for Decoupled Microservices
         this.bus = new events.EventBus(this, 'FintERPBus', {
-            eventBusName: 'FintERP-Central-Bus',
+            eventBusName: `FintERP-Central-Bus${suffix}`,
         });
 
         // Archive all events for debugging/replay (Essential for Enterprise)
         this.bus.archive('FintERPBusArchive', {
-            archiveName: 'FintERP-All-Events',
+            archiveName: `FintERP-All-Events${suffix}`,
             eventPattern: {
                 account: [cdk.Stack.of(this).account],
             },
@@ -24,12 +30,12 @@ export class BusStack extends cdk.Stack {
 
         new cdk.CfnOutput(this, 'BusName', {
             value: this.bus.eventBusName,
-            exportName: 'FintERP-BusName',
+            exportName: `FintERP-BusName-${props.environment}`,
         });
 
         new cdk.CfnOutput(this, 'BusArn', {
             value: this.bus.eventBusArn,
-            exportName: 'FintERP-BusArn',
+            exportName: `FintERP-BusArn-${props.environment}`,
         });
     }
 }

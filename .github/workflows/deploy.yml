@@ -2,9 +2,9 @@ name: Deploy FintERP
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   deploy:
@@ -31,14 +31,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
+      - name: Determine Environment
+        id: env-selector
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "TARGET_ENV=Prod" >> $GITHUB_ENV
+          else
+            echo "TARGET_ENV=Dev" >> $GITHUB_ENV
+          fi
+
       - name: Build & Synth IaC
         run: |
           npx turbo run build --filter=iac...
           cd packages/iac
-          npx cdk synth
+          npx cdk synth -c env=${{ env.TARGET_ENV }}
 
-      - name: Deploy Infrastructure (Approve on Main only)
-        if: github.ref == 'refs/heads/main'
+      - name: Deploy Infrastructure
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         run: |
           cd packages/iac
-          npx cdk deploy --all --require-approval never
+          npx cdk deploy --all --require-approval never -c env=${{ env.TARGET_ENV }}

@@ -2,10 +2,14 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
+interface NetworkStackProps extends cdk.StackProps {
+  environment: string;
+}
+
 export class NetworkStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
     // VPC "The Backbone"
@@ -35,7 +39,7 @@ export class NetworkStack extends cdk.Stack {
     // Output VPC ID for other stacks
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.vpc.vpcId,
-      exportName: 'FintERPVpcId',
+      exportName: `FintERPVpcId-${props.environment}`,
     });
   }
 }
